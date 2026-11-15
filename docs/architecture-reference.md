@@ -302,3 +302,10 @@ print(s.recv(1024).decode())
 s.close()
 ```
 *(Should return `HTTP/1.1 101 Switching Protocols`)*.
+
+
+---
+
+## 8. License
+
+This project is licensed under the **MIT License** — see the [LICENSE](../LICENSE) file for details.

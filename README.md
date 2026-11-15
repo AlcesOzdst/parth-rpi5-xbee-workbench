@@ -123,3 +123,19 @@ docker compose up -d --build
 | **`MQTT WebSocket: Connecting...`** | Port 9001 blocked or Mosquitto container stopped. | Run `docker logs zigbee_mqtt_broker` and ensure port 9001 is listening. |
 | **`docker: command not found`** | Docker is not installed or not exposed in WSL. | Enable Docker Desktop -> Settings -> Resources -> WSL Integration -> enable Ubuntu. |
 | **Stale Web UI** | Browser cached old JavaScript. | Force refresh with `Ctrl + F5` (anti-cache headers are also enabled by default). |
+
+
+---
+
+## Technical References
+
+1. **IEEE 802.15.4 Specification**: *IEEE Standard for Low-Rate Wireless Networks (LR-WPANs)* — 2.4 GHz PHY & MAC sublayer standards.
+2. **Zigbee Cluster Library (ZCL)**: Connectivity Standards Alliance (CSA) — Cluster `0x0006` (OnOff) and `0x0402` (Temperature Measurement).
+3. **Digi XBee / XBee S2C Family User Guide**: Digi International — API mode frames (`0x10` TX, `0x90` RX) and signal metrics (LQI, RSSI).
+4. **Eclipse Mosquitto 2.0**: MQTT 3.1.1 / 5.0 broker with WebSockets transport.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for full details.
