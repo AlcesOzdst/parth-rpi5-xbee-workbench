@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi 5 & XBee Workbench</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="paho-mqtt.min.js?v=1.1.0"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #07080c; color: #94a3b8; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .pane { background: #0d0f17; border: 1px solid #1a1e2e; }
+        .pane-interactive { transition: border-color 0.15s ease, background 0.15s ease; }
+        .pane-interactive:hover { border-color: #3b82f6; background: #121624; }
+        
+        /* Custom sleek scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(13, 15, 23, 0.6); }
+        ::-webkit-scrollbar-thumb { background: #1e2638; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2e3852; }
+    </style>
+</head>
+<body class="min-h-[100dvh] flex flex-col justify-between p-6 max-w-[1700px] mx-auto antialiased">
+
+    <!-- Top Navigation Header -->
+    <header class="pane rounded-lg px-5 py-3 flex justify-between items-center text-xs mb-6">
+        <div class="flex items-center space-x-3">
+            <span id="header-pulse" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="font-semibold text-slate-200 mono tracking-wider">PI5-XBEE-WORKBENCH // 802.15.4 KERNEL SIMULATION</span>
+        </div>
+        <div class="flex items-center space-x-6">
+            <span class="text-slate-400">Broker Endpoint: <strong class="text-slate-200 mono">ws://localhost:9001</strong></span>
+            <span id="conn-status" class="px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono tracking-wider">CONNECTING</span>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
+
+        <!-- Left Sidebar: Hardware Node Inventory (4 Cols) -->
+        <div class="lg:col-span-4 space-y-4">
+            <div class="pane rounded-lg p-5">
+                <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-4">Hardware Inventory</div>
+                
+                <div class="space-y-3">
+                    <!-- Coordinator Node -->
+                    <div onclick="inspectNode('Raspberry Pi 5 Hub', 'wsl_zigbee_simulator', 'simulation_daemon.py', 'coordinator')" 
+                         class="pane pane-interactive p-4 rounded-md cursor-pointer flex items-center justify-between group">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs font-medium text-slate-200 group-hover:text-emerald-400 transition">Raspberry Pi 5 Hub</span>
+                                <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded mono font-semibold">COORD</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mono mt-1">/dev/ttyAMA0 • PAN 0x1234 • Stack ZCL</p>
+                        </div>
+                        <span class="text-xs text-slate-500 group-hover:text-emerald-400 mono transition">&rarr;</span>
+                    </div>
+
+                    <!-- Router Node -->
+                    <div onclick="inspectNode('XBee Router 0x2001', 'wsl_zigbee_simulator', 'simulation_daemon.py', 'router')" 
+                         class="pane pane-interactive p-4 rounded-md cursor-pointer flex items-center justify-between group">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs font-medium text-slate-200 group-hover:text-indigo-400 transition">XBee S2C (0x2001)</span>
+                                <span class="text-[10px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded mono font-semibold">ROUTER</span>
+                                <span id="badge-relay" class="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded mono">RELAY: INIT</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mono mt-1">LQI: 255 • Mesh Heartbeat Active</p>
+                        </div>
+                        <span class="text-xs text-slate-500 group-hover:text-indigo-400 mono transition">&rarr;</span>
+                    </div>
+
+                    <!-- Sensor Node 1 -->
+                    <div onclick="inspectNode('XBee Sensor 0x1001', 'wsl_zigbee_simulator', 'simulation_daemon.py', 'sensor')" 
+                         class="pane pane-interactive p-4 rounded-md cursor-pointer flex items-center justify-between group">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs font-medium text-slate-200 group-hover:text-sky-400 transition">XBee Sensor (0x1001)</span>
+                                <span class="text-[10px] bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded mono font-semibold">SENSOR</span>
+                                <span id="temp-0x1001" class="text-[10px] bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded mono font-bold">--.- °C</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mono mt-1">Cluster 0x0402 • Ep 1 • Battery 98%</p>
+                        </div>
+                        <span class="text-xs text-slate-500 group-hover:text-sky-400 mono transition">&rarr;</span>
+                    </div>
+
+                    <!-- Sensor Node 2 -->
+                    <div onclick="inspectNode('XBee Sensor 0x1002', 'wsl_zigbee_simulator', 'simulation_daemon.py', 'sensor')" 
+                         class="pane pane-interactive p-4 rounded-md cursor-pointer flex items-center justify-between group">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs font-medium text-slate-200 group-hover:text-teal-400 transition">XBee Sensor (0x1002)</span>
+                                <span class="text-[10px] bg-teal-500/10 text-teal-400 px-1.5 py-0.5 rounded mono font-semibold">SENSOR</span>
+                                <span id="temp-0x1002" class="text-[10px] bg-teal-500/10 text-teal-400 px-1.5 py-0.5 rounded mono font-bold">--.- °C</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mono mt-1">Cluster 0x0402 • Ep 1 • Battery 95%</p>
+                        </div>
+                        <span class="text-xs text-slate-500 group-hover:text-teal-400 mono transition">&rarr;</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Telemetry Summary Box -->
+            <div class="pane rounded-lg p-5">
+                <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Bus Diagnostics</div>
+                <div class="space-y-2 text-xs mono">
+                    <div class="flex justify-between py-1 border-b border-[#1a1e2e]">
+                        <span class="text-slate-500">Processed Packets</span>
+                        <span id="diag-packet-count" class="text-emerald-400 font-bold">0</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-[#1a1e2e]">
+                        <span class="text-slate-500">Packet Loss Rate</span>
+                        <span class="text-emerald-400">0.00%</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-[#1a1e2e]">
+                        <span class="text-slate-500">RF Frequency</span>
+                        <span class="text-slate-300">2.425 GHz (CH 15)</span>
+                    </div>
+                    <div class="flex justify-between py-1">
+                        <span class="text-slate-500">Poll Interval</span>
+                        <span class="text-slate-300">2.5s - 4.5s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Expanded Live UART Stream (8 Cols) -->
+        <div class="lg:col-span-8 flex flex-col">
+            <div class="pane rounded-lg p-5 flex flex-col h-[540px]">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Live UART & RF Frame Buffer</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="clearStream()" class="text-[11px] text-slate-400 hover:text-slate-200 bg-[#141824] px-3 py-1 rounded border border-[#22273d] transition">Clear Buffer</button>
+                    </div>
+                </div>
+                <div id="packet-stream" class="bg-[#040508] border border-[#141824] rounded p-4 font-mono text-[11px] flex-1 overflow-y-auto space-y-1.5 text-slate-300">
+                    <div class="text-slate-600">[system] Initialized socket listener on topic zigbee/#</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Status Bar -->
+    <footer class="pane rounded-lg px-5 py-3 mt-6 flex justify-between items-center text-[11px] text-slate-500 mono">
+        <div>Environment: Docker Container (wsl_zigbee_simulator)</div>
+        <div>Press any node on the left panel to inspect live code, terminal, or dispatch custom messages.</div>
+    </footer>
+
+    <!-- Node Inspection Modal -->
+    <div id="inspectorModal" class="fixed inset-0 bg-black/80 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="pane rounded-lg max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col bg-[#0d0f17] border border-[#22273d]">
+            <!-- Modal Header -->
+            <div class="bg-[#121624] px-5 py-3.5 flex justify-between items-center border-b border-[#1a1e2e]">
+                <div>
+                    <h3 id="modal-title" class="text-xs font-semibold text-slate-200 mono">Node Inspection</h3>
+                    <p id="modal-subtitle" class="text-[11px] text-slate-500 mono mt-0.5">Container: wsl_zigbee_simulator | Source: simulation_daemon.py</p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-500 hover:text-slate-200 text-sm font-bold px-2 py-1" title="Close (Esc)">✕</button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                <!-- Top Section: Source Code or Downlink Console -->
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label id="modal-top-label" class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Python Runtime Handler:</label>
+                        <!-- Selector Buttons -->
+                        <div class="flex space-x-1 mono text-[10px]">
+                            <button id="btn-snippet" onclick="showCodeView('snippet')" class="px-2 py-0.5 bg-[#1a1e2e] text-blue-400 rounded border border-[#22273d]">Component</button>
+                            <button id="btn-full" onclick="showCodeView('full')" class="px-2 py-0.5 bg-[#0d0f17] text-slate-400 rounded border border-[#1a1e2e] hover:bg-[#1a1e2e]">Full File</button>
+                            <button id="btn-tx" onclick="showCodeView('tx')" class="px-2 py-0.5 bg-[#0d0f17] text-emerald-400 rounded border border-[#1a1e2e] hover:bg-[#1a1e2e]">Custom TX</button>
+                        </div>
+                    </div>
+
+                    <!-- Code View -->
+                    <pre id="modal-code-box" class="bg-[#040508] border border-[#141824] rounded p-3 mt-1 text-[11px] mono text-emerald-400 overflow-x-auto max-h-48 leading-relaxed whitespace-pre"><code id="modal-code">Loading exact code from /app/src/simulation_daemon.py...</code></pre>
+
+                    <!-- Downlink Custom TX View -->
+                    <div id="modal-tx-box" class="hidden bg-[#040508] border border-[#141824] rounded p-3.5 space-y-2.5">
+                        <div class="flex space-x-2 items-center text-xs mono">
+                            <span class="text-slate-500 text-[10px] uppercase">Target:</span>
+                            <select id="modal-tx-target" class="bg-[#0d0f17] border border-[#1a1e2e] text-slate-200 text-xs rounded px-2 py-1 mono flex-1 focus:outline-none focus:border-blue-500">
+                                <option value="0xFFFF">Broadcast (0xFFFF - All Nodes)</option>
+                                <option value="0x1001">Sensor End Device (0x1001)</option>
+                                <option value="0x1002">Sensor End Device (0x1002)</option>
+                                <option value="0x2001">Mesh Router (0x2001)</option>
+                            </select>
+                        </div>
+                        <form onsubmit="sendCustomMessage(event)" class="flex space-x-1.5">
+                            <input id="modal-tx-input" type="text" placeholder="Type custom downlink payload..." 
+                                   class="bg-[#0d0f17] border border-[#1a1e2e] rounded px-2.5 py-1 text-xs text-slate-200 placeholder-slate-600 flex-1 mono focus:outline-none focus:border-blue-500" />
+                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-3 py-1 rounded transition mono">
+                                Transmit &rarr;
+                            </button>
+                        </form>
+                        <div class="flex flex-wrap gap-1 text-[9px] mono">
+                            <button type="button" onclick="setModalPreset('PING_MESH')" class="px-2 py-0.5 bg-[#0d0f17] hover:bg-[#1a1e2e] text-slate-400 hover:text-white rounded border border-[#1a1e2e]">PING_MESH</button>
+                            <button type="button" onclick="setModalPreset('POLL_TEMP_NOW')" class="px-2 py-0.5 bg-[#0d0f17] hover:bg-[#1a1e2e] text-slate-400 hover:text-white rounded border border-[#1a1e2e]">POLL_TEMP_NOW</button>
+                            <button type="button" onclick="setModalPreset('RELAY_TOGGLE')" class="px-2 py-0.5 bg-[#0d0f17] hover:bg-[#1a1e2e] text-slate-400 hover:text-white rounded border border-[#1a1e2e]">RELAY_TOGGLE</button>
+                            <button type="button" onclick="setModalPreset('ALERT_BUZZER:ON')" class="px-2 py-0.5 bg-[#0d0f17] hover:bg-[#1a1e2e] text-slate-400 hover:text-white rounded border border-[#1a1e2e]">ALERT_BUZZER:ON</button>
+                        </div>
+                        <div id="modal-tx-log" class="bg-[#0d0f17] border border-[#1a1e2e] rounded p-2 text-[10px] mono h-16 overflow-y-auto space-y-0.5 text-slate-400">
+                            <div class="text-slate-600">[RPi 5 Downlink Ready]</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Section: Real Container Terminal Stream -->
+                <div>
+                    <label class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Stdout Container Buffer ($ docker logs -f wsl_zigbee_simulator):</label>
+                    <div id="modal-terminal" class="bg-[#040508] border border-[#141824] rounded p-3 mt-1.5 text-[11px] mono h-36 overflow-y-auto text-slate-300 space-y-1 font-mono">
+                        <div class="text-emerald-400">[stdout] Initialized serial link over /dev/ttyAMA0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-[#121624] px-5 py-3 border-t border-[#1a1e2e] flex justify-end">
+                <button onclick="closeModal()" class="bg-[#1a1e2e] hover:bg-[#22273d] text-slate-300 text-xs px-4 py-1.5 rounded font-medium transition mono">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MQTT WebSocket & Interactive Script -->
+    <script>
+        const packetStream = document.getElementById('packet-stream');
+        const diagPacketCount = document.getElementById('diag-packet-count');
+        let totalPackets = 0;
+        let currentModalTarget = null;
+        let cachedSource = null;
+        let mqttClientInstance = null;
+
+        // Support both modern Paho.Client and legacy Paho.MQTT.Client
+        if (window.Paho && !window.Paho.MQTT) {
+            window.Paho.MQTT = window.Paho;
+        }
+        const MQTTClient = (window.Paho && window.Paho.Client) || (window.Paho && window.Paho.MQTT && window.Paho.MQTT.Client);
+
+        function logTx(text, colorClass = "text-slate-300") {
+            const timeNow = new Date().toLocaleTimeString();
+            const el = document.getElementById('modal-tx-log');
+            if (el) {
+                const line = document.createElement('div');
+                line.className = colorClass;
+                line.innerHTML = `<span class="text-slate-600">[${timeNow}]</span> ${text}`;
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+
+        function setModalPreset(val) {
+            const inp = document.getElementById('modal-tx-input');
+            if (inp) inp.value = val;
+        }
+
+        async function sendCustomMessage(e) {
+            if (e) e.preventDefault();
+            const input = document.getElementById('modal-tx-input');
+            const targetSelect = document.getElementById('modal-tx-target');
+            if (!input || !targetSelect) return;
+            const message = input.value.trim();
+            const target = targetSelect.value;
+
+            if (!message) return;
+
+            logTx(`<strong>[TX &rarr; ${target}]</strong> ${message}`, "text-emerald-400");
+
+            const payload = JSON.stringify({
+                target: target,
+                message: message,
+                timestamp: new Date().toISOString()
+            });
+
+            // 1. Send via active MQTT WebSocket if connected
+            let sentViaMqtt = false;
+            if (mqttClientInstance && mqttClientInstance.isConnected()) {
+                try {
+                    const mqttMsg = new Paho.Message(payload);
+                    mqttMsg.destinationName = "zigbee/custom/tx";
+                    mqttClientInstance.send(mqttMsg);
+                    sentViaMqtt = true;
+                } catch (err) {
+                    console.warn("MQTT send fallback to HTTP:", err);
+                }
+            }
+
+            // 2. Fallback via HTTP /api/send endpoint
+            if (!sentViaMqtt) {
+                try {
+                    const res = await fetch('/api/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload
+                    });
+                    if (!res.ok) {
+                        logTx(`[HTTP Error]: ${res.statusText}`, "text-rose-400");
+                    }
+                } catch (err) {
+                    logTx(`[Network Error]: ${err.message}`, "text-rose-400");
+                }
+            }
+
+            input.value = '';
+        }
+
+        if (!MQTTClient) {
+            const statusEl = document.getElementById('conn-status');
+            statusEl.innerText = "LIB ERROR";
+            statusEl.className = "px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono tracking-wider";
+        } else {
+            const host = window.location.hostname || "localhost";
+            const port = 9001;
+            const path = "/mqtt";
+            const clientId = "workbench_" + parseInt(Math.random() * 10000);
+
+            const client = new MQTTClient(host, Number(port), path, clientId);
+            mqttClientInstance = client;
+
+            client.onConnectionLost = (responseObj) => {
+                const statusEl = document.getElementById('conn-status');
+                statusEl.innerText = "DISCONNECTED";
+                statusEl.className = "px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono tracking-wider";
+                document.getElementById('header-pulse').className = "w-2 h-2 rounded-full bg-rose-500";
+                setTimeout(connectMqtt, 3000);
+            };
+
+            client.onMessageArrived = (message) => {
+                const topic = message.destinationName;
+                const timeNow = new Date().toLocaleTimeString();
+
+                // 1. Custom Message Acknowledgments
+                if (topic === "zigbee/custom/rx") {
+                    try {
+                        const data = JSON.parse(message.payloadString);
+                        logTx(`<strong>[RX ACK &larr; ${data.src_node}]</strong> ${data.reply} <span class="text-slate-600">(${data.rssi}, LQI=${data.lqi})</span>`, "text-sky-400");
+                    } catch (e) {}
+                    return;
+                }
+
+                // 2. Real container stdout stream to Modal Terminal
+                if (topic.startsWith("zigbee/terminal/")) {
+                    try {
+                        const event = JSON.parse(message.payloadString);
+                        if (currentModalTarget && (currentModalTarget === "all" || currentModalTarget === event.target || event.target === "system")) {
+                            const term = document.getElementById('modal-terminal');
+                            const line = document.createElement('div');
+                            if (event.text.includes("Frame")) {
+                                line.className = "text-amber-400";
+                            } else if (event.text.includes("COORDINATOR")) {
+                                line.className = "text-emerald-400";
+                            } else if (event.text.includes("ROUTER")) {
+                                line.className = "text-indigo-400";
+                            } else {
+                                line.className = "text-sky-400";
+                            }
+                            line.textContent = `[${event.time}] [${event.target.toUpperCase()}] ${event.text}`;
+                            term.appendChild(line);
+                            term.scrollTop = term.scrollHeight;
+                        }
+                    } catch (e) {}
+                    return;
+                }
+
+                // 3. Sensor Telemetry (update badges + UART stream)
+                if (topic.startsWith("zigbee/sensor/")) {
+                    totalPackets++;
+                    if (diagPacketCount) diagPacketCount.innerText = totalPackets;
+                    const nodeId = topic.split('/')[2];
+                    try {
+                        const payload = JSON.parse(message.payloadString);
+                        const tempElem = document.getElementById('temp-0x' + nodeId);
+                        if (tempElem) {
+                            tempElem.innerText = payload.value.toFixed(1) + ' °C';
+                        }
+                    } catch (e) {}
+
+                    const line = document.createElement('div');
+                    line.innerHTML = `<span class="text-slate-600">[${timeNow}]</span> <span class="text-sky-400 font-medium">${topic}</span>: <span class="text-slate-300">${message.payloadString}</span>`;
+                    packetStream.appendChild(line);
+                    packetStream.scrollTop = packetStream.scrollHeight;
+                    return;
+                }
+
+                // 4. Router Heartbeat (update relay badge + UART stream)
+                if (topic.startsWith("zigbee/router/")) {
+                    totalPackets++;
+                    if (diagPacketCount) diagPacketCount.innerText = totalPackets;
+                    try {
+                        const payload = JSON.parse(message.payloadString);
+                        const relayBadge = document.getElementById('badge-relay');
+                        if (relayBadge) {
+                            if (payload.relay_state) {
+                                relayBadge.innerText = "RELAY: ON";
+                                relayBadge.className = "text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded mono font-semibold";
+                            } else {
+                                relayBadge.innerText = "RELAY: OFF";
+                                relayBadge.className = "text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded mono";
+                            }
+                        }
+                    } catch (e) {}
+
+                    const line = document.createElement('div');
+                    line.innerHTML = `<span class="text-slate-600">[${timeNow}]</span> <span class="text-indigo-400 font-medium">${topic}</span>: <span class="text-slate-300">${message.payloadString}</span>`;
+                    packetStream.appendChild(line);
+                    packetStream.scrollTop = packetStream.scrollHeight;
+                    return;
+                }
+
+                // 5. General Zigbee frames
+                totalPackets++;
+                if (diagPacketCount) diagPacketCount.innerText = totalPackets;
+                const line = document.createElement('div');
+                line.innerHTML = `<span class="text-slate-600">[${timeNow}]</span> <span class="text-blue-400 font-medium">${topic}</span>: <span class="text-slate-300">${message.payloadString}</span>`;
+                packetStream.appendChild(line);
+                packetStream.scrollTop = packetStream.scrollHeight;
+            };
+
+            function connectMqtt() {
+                client.connect({
+                    timeout: 5,
+                    cleanSession: true,
+                    useSSL: false,
+                    onSuccess: () => {
+                        const statusEl = document.getElementById('conn-status');
+                        statusEl.innerText = "CONNECTED";
+                        statusEl.className = "px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono tracking-wider";
+                        document.getElementById('header-pulse').className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                        client.subscribe("zigbee/#");
+                    },
+                    onFailure: (err) => {
+                        const statusEl = document.getElementById('conn-status');
+                        statusEl.innerText = "CONN ERROR";
+                        statusEl.className = "px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono tracking-wider";
+                        document.getElementById('header-pulse').className = "w-2 h-2 rounded-full bg-rose-500";
+                        setTimeout(connectMqtt, 3000);
+                    }
+                });
+            }
+
+            connectMqtt();
+        }
+
+        function showCodeView(view) {
+            const codeBox = document.getElementById('modal-code-box');
+            const txBox = document.getElementById('modal-tx-box');
+            const codeElem = document.getElementById('modal-code');
+            const btnSnippet = document.getElementById('btn-snippet');
+            const btnFull = document.getElementById('btn-full');
+            const btnTx = document.getElementById('btn-tx');
+            const topLabel = document.getElementById('modal-top-label');
+
+            const activeClass = "px-2 py-0.5 bg-[#1a1e2e] text-blue-400 rounded border border-[#22273d]";
+            const inactiveClass = "px-2 py-0.5 bg-[#0d0f17] text-slate-400 rounded border border-[#1a1e2e] hover:bg-[#1a1e2e]";
+            const activeTxClass = "px-2 py-0.5 bg-emerald-950 text-emerald-400 rounded border border-emerald-700 font-medium";
+            const inactiveTxClass = "px-2 py-0.5 bg-[#0d0f17] text-emerald-400/80 rounded border border-[#1a1e2e] hover:bg-[#1a1e2e]";
+
+            if (view === 'tx') {
+                codeBox.classList.add('hidden');
+                txBox.classList.remove('hidden');
+                btnTx.className = activeTxClass;
+                btnSnippet.className = inactiveClass;
+                btnFull.className = inactiveClass;
+                topLabel.innerHTML = '<span class="text-emerald-400 font-semibold">Interactive Downlink Console:</span>';
+            } else {
+                txBox.classList.add('hidden');
+                codeBox.classList.remove('hidden');
+                btnTx.className = inactiveTxClass;
+                topLabel.innerHTML = 'Python Runtime Handler:';
+
+                if (view === 'full') {
+                    if (cachedSource) codeElem.textContent = cachedSource.full_code;
+                    btnFull.className = activeClass;
+                    btnSnippet.className = inactiveClass;
+                } else {
+                    if (cachedSource) codeElem.textContent = cachedSource.code;
+                    btnSnippet.className = activeClass;
+                    btnFull.className = inactiveClass;
+                }
+            }
+        }
+
+        async function inspectNode(name, container, file, targetKey = 'coordinator') {
+            currentModalTarget = targetKey;
+            cachedSource = null;
+
+            document.getElementById('modal-title').innerText = name;
+            document.getElementById('modal-subtitle').innerText = `Container: ${container} | Source: /app/src/${file}`;
+            document.getElementById('modal-code').textContent = "// Fetching live source code directly from container filesystem...";
+            
+            // Set default target in modal dropdown
+            const modalTargetSelect = document.getElementById('modal-tx-target');
+            if (targetKey === 'coordinator') {
+                modalTargetSelect.value = "0xFFFF";
+            } else if (targetKey === 'router') {
+                modalTargetSelect.value = "0x2001";
+            } else if (targetKey === 'sensor') {
+                modalTargetSelect.value = "0x1001";
+            }
+
+            const term = document.getElementById('modal-terminal');
+            term.innerHTML = `<div class="text-slate-500">[stdout] Attaching to container ${container} stream for ${targetKey}...</div>`;
+
+            document.getElementById('inspectorModal').classList.remove('hidden');
+            document.getElementById('inspectorModal').classList.add('flex');
+
+            showCodeView('snippet');
+
+            // 1. Fetch exact source code
+            try {
+                const res = await fetch(`/api/source?target=${targetKey}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    cachedSource = data;
+                    document.getElementById('modal-code').textContent = data.code;
+                } else {
+                    document.getElementById('modal-code').textContent = "// Error loading file from container disk";
+                }
+            } catch (err) {
+                document.getElementById('modal-code').textContent = "// Network error fetching source: " + err.message;
+            }
+
+            // 2. Fetch real container logs
+            try {
+                const logRes = await fetch(`/api/logs?target=${targetKey}&tail=35`);
+                if (logRes.ok) {
+                    const logData = await logRes.json();
+                    term.innerHTML = "";
+                    if (!logData.logs || logData.logs.length === 0) {
+                        term.innerHTML = `<div class="text-slate-500">[stdout] Container running. Waiting for telemetry frames...</div>`;
+                    } else {
+                        logData.logs.forEach(line => {
+                            const l = document.createElement('div');
+                            if (line.includes("Frame")) {
+                                l.className = "text-amber-400";
+                            } else if (line.includes("COORDINATOR")) {
+                                l.className = "text-emerald-400";
+                            } else if (line.includes("ROUTER")) {
+                                l.className = "text-indigo-400";
+                            } else {
+                                l.className = "text-slate-300";
+                            }
+                            l.textContent = line;
+                            term.appendChild(l);
+                        });
+                        term.scrollTop = term.scrollHeight;
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching initial container logs:", err);
+            }
+        }
+
+        function closeModal() {
+            currentModalTarget = null;
+            document.getElementById('inspectorModal').classList.remove('flex');
+            document.getElementById('inspectorModal').classList.add('hidden');
+        }
+
+        function clearStream() {
+            packetStream.innerHTML = '<div class="text-slate-600">[system] Buffer cleared. Waiting for frames...</div>';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>
