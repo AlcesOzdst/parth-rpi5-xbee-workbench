@@ -1,0 +1,19 @@
+# Mosquitto runtime state & log files
+mosquitto/data/*
+!mosquitto/data/.gitkeep
+mosquitto/log/*
+!mosquitto/log/.gitkeep
+
+# Simulator runtime stdout logs
+src/container_terminal.log
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS metadata
+.DS_Store
+Thumbs.db
